@@ -54,7 +54,7 @@ jobs:
       - name: Build generic-uf02 only
         run: |
           cd openwrt
-          make -j"$(nproc)"
+          make -j"$(nproc)" V=s
 
       - name: Verify Firewall4 TProxy and sysupgrade payload
         run: |
