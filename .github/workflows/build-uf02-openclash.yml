@@ -8,7 +8,7 @@ permissions:
 
 env:
   OPENWRT_VERSION: v25.12.5
-  OPENCLASH_FEED: src-git-full openclash https://github.com/vernesong/OpenClash.git^c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
+  OPENCLASH_FEED: src-git openclash https://github.com/vernesong/OpenClash.git^c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
 
 jobs:
   build:
@@ -43,8 +43,18 @@ jobs:
       - name: Add fixed OpenClash feed and generate configuration
         run: |
           cd openwrt
-          printf '\n%s\n' "$OPENCLASH_FEED" >> feeds.conf.default
+          git config --global http.version HTTP/1.1
           ./scripts/feeds update -a
+          printf '\n%s\n' "$OPENCLASH_FEED" >> feeds.conf.default
+          for attempt in 1 2 3; do
+            if ./scripts/feeds update openclash && test -d feeds/openclash; then
+              break
+            fi
+            rm -rf feeds/openclash
+            test "$attempt" -lt 3 || exit 1
+            sleep 15
+          done
+          test -d feeds/openclash
           ./scripts/feeds install -a
           cp ../diffconfig_uf02 .config
           make defconfig
