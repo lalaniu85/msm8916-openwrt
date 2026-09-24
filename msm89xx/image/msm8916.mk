@@ -44,6 +44,9 @@ define Device/generic-uf02
   $(Device/msm8916)
   DEVICE_VENDOR := Generic
   DEVICE_MODEL := UF02 (250605 V0S)
+  # The installed UF02 reports this exact board name.  sysupgrade-tar uses
+  # BOARD_NAME for both sysupgrade-<board>/CONTROL and image metadata.
+  BOARD_NAME := uf02-250605v0s
   SUPPORTED_DEVICES := uf02,250605v0s
   FILESYSTEMS := squashfs
   DEVICE_PACKAGES := wpad-basic-wolfssl rmtfs uci-usb-gadget \

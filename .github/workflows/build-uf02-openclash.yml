@@ -66,16 +66,19 @@ jobs:
           cd openwrt
           make -j"$(nproc)" V=s
 
-      - name: Verify Firewall4 TProxy and sysupgrade payload
+      - name: Verify Firewall4 TProxy and UF02 sysupgrade payload
         run: |
           set -euo pipefail
           target_dir="openwrt/bin/targets/msm89xx/msm8916"
           image=$(find "$target_dir" -maxdepth 1 -type f -name '*generic-uf02-squashfs-sysupgrade.bin' -print -quit)
           manifest=$(find "$target_dir" -maxdepth 1 -type f -name '*generic-uf02*.manifest' -print -quit)
+          fwtool="openwrt/staging_dir/host/bin/fwtool"
+          sysupgrade_dir="sysupgrade-uf02-250605v0s"
           test -n "$image"
           test -s "$image"
           test -n "$manifest"
           test -s "$manifest"
+          test -x "$fwtool"
 
           kernel_config=$(find openwrt/build_dir -path '*/linux-*/linux-*/.config' -print -quit)
           test -n "$kernel_config"
@@ -84,13 +87,30 @@ jobs:
           grep -qx 'CONFIG_NFT_TPROXY=m' "$kernel_config"
           grep -q '^kmod-nft-tproxy ' "$manifest"
           grep -q '^luci-app-openclash ' "$manifest"
-          tar tf "$image" | grep -Eq '/CONTROL$'
-          tar tf "$image" | grep -Eq '/kernel$'
-          tar tf "$image" | grep -Eq '/root$'
+
+          # Do not infer validity from the filename.  The running UF02's
+          # platform.sh extracts these exact members from this exact prefix.
+          tar tf "$image" | tee "$target_dir/sysupgrade-tar-list.txt"
+          grep -Fx "${sysupgrade_dir}/" "$target_dir/sysupgrade-tar-list.txt"
+          grep -Fx "${sysupgrade_dir}/CONTROL" "$target_dir/sysupgrade-tar-list.txt"
+          grep -Fx "${sysupgrade_dir}/kernel" "$target_dir/sysupgrade-tar-list.txt"
+          grep -Fx "${sysupgrade_dir}/root" "$target_dir/sysupgrade-tar-list.txt"
+          tar -xOf "$image" "${sysupgrade_dir}/CONTROL" | tee "$target_dir/sysupgrade-control.txt"
+          grep -Fx "BOARD=uf02-250605v0s" "$target_dir/sysupgrade-control.txt"
+
+          # REQUIRE_IMAGE_METADATA=1 is enforced before platform_check_image.
+          # Extract and retain the real fwtool trailer metadata as evidence.
+          "$fwtool" -i "$target_dir/sysupgrade-metadata.json" "$image"
+          test -s "$target_dir/sysupgrade-metadata.json"
+          grep -F '"uf02,250605v0s"' "$target_dir/sysupgrade-metadata.json"
+          grep -F '"board": "uf02-250605v0s"' "$target_dir/sysupgrade-metadata.json"
 
           sha256sum "$image" > "$target_dir/sha256sums-uf02-openclash"
           mkdir -p artifacts
-          cp "$image" "$manifest" "$target_dir/sha256sums-uf02-openclash" artifacts/
+          cp "$image" "$manifest" "$target_dir/sha256sums-uf02-openclash" \
+            "$target_dir/sysupgrade-tar-list.txt" \
+            "$target_dir/sysupgrade-control.txt" \
+            "$target_dir/sysupgrade-metadata.json" artifacts/
 
       - name: Upload verified sysupgrade image
         uses: actions/upload-artifact@v4
